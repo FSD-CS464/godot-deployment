@@ -110,83 +110,57 @@ body {
 		</div>
 
 		<script src="godot-fsd.js"></script>
-		
-		<!-- Authentication postMessage listener for JWT authentication -->
 		<script>
-		// Parent origin for localhost testing - update this for production
-		const EXPECTED_PARENT_ORIGIN = 'http://localhost:3000'; // Next.js default port
+			// 💡 List of allowed origins for the parent Next.js app (the sender)
+			const ALLOWED_PARENT_ORIGINS = [
+				'http://localhost:3000',
+				'http://127.0.0.1:3000',
+				'https://bunnyhabits.click'
+			];
 
-		// Store UID in case message arrives before Godot is ready
-		let pendingUID = null;
+			// Store UID and JWT token if message arrives before GDScript is ready to poll
+			let pendingUID = null;
+			let pendingToken = null;
 
-		// Function to send UID to Godot once it's ready
-		function sendUIDToGodot(uid) {
-			// The GodotGameBridge_set_user_id function is created by Godot via JavaScriptBridge
-			if (typeof GodotGameBridge_set_user_id !== 'undefined' && typeof GodotGameBridge_set_user_id === 'function') {
-				try {
-					GodotGameBridge_set_user_id(uid);
-					console.log('Successfully sent UID to Godot: ' + uid);
-					pendingUID = null; // Clear pending UID after successful send
-				} catch (error) {
-					console.error('Error calling GodotGameBridge_set_user_id:', error);
+			// Function for GDScript to call to get the pending UID
+			window.getPendingUID = function() {
+				if (pendingUID !== null) {
+					let uid = pendingUID;
+					pendingUID = null; // Clear after sending
+					return uid;
 				}
-				return true;
+				return null;
 			}
-			return false;
-		}
 
-		// Try to send pending UID when Godot becomes available
-		function checkAndSendPendingUID() {
-			if (pendingUID !== null) {
-				if (sendUIDToGodot(pendingUID)) {
-					return true;
+			// Function for GDScript to call to get the pending JWT token
+			window.getPendingToken = function() {
+				if (pendingToken !== null) {
+					let token = pendingToken;
+					pendingToken = null; // Clear after sending
+					return token;
 				}
-			}
-			return false;
-		}
-
-		window.addEventListener('message', (event) => {
-			// 1. **SECURITY CHECK:** Verify the origin of the sender
-			if (event.origin !== EXPECTED_PARENT_ORIGIN) {
-				console.warn('PostMessage received from UNTRUSTED origin:', event.origin);
-				return;
+				return null;
 			}
 
-			const data = event.data;
-
-			// 2. Validate the message format
-			if (data && data.type === 'AUTH_INIT' && data.uid) {
-				const uid = data.uid;
-				console.log('Successfully received authenticated UID in Godot JS: ' + uid);
-
-				// 3. Try to send immediately, or store for later
-				if (!sendUIDToGodot(uid)) {
-					// Godot not ready yet, store the UID
-					pendingUID = uid;
-					console.log('Godot not ready yet, storing UID for later...');
-					
-					// Poll for Godot to be ready (check every 100ms for up to 10 seconds)
-					let attempts = 0;
-					const maxAttempts = 100; // 10 seconds total
-					const checkInterval = setInterval(() => {
-						attempts++;
-						if (checkAndSendPendingUID() || attempts >= maxAttempts) {
-							clearInterval(checkInterval);
-							if (attempts >= maxAttempts && pendingUID !== null) {
-								console.error('GodotGameBridge_set_user_id not available after timeout');
-							}
-						}
-					}, 100);
+			// Listen for postMessage from parent window
+			window.addEventListener('message', (event) => {
+				// Security check
+				if (!ALLOWED_PARENT_ORIGINS.includes(event.origin)) {
+					console.warn('[JS] Rejected message from untrusted origin:', event.origin);
+					return;
 				}
-			}
-		}, false);
 
-		// Also check periodically if a message arrives after page load
-		setInterval(checkAndSendPendingUID, 500);
+				const data = event.data;
+				if (data && data.type === 'AUTH_INIT' && data.uid) {
+					pendingUID = data.uid;
+					if (data.access_token) {
+						pendingToken = data.access_token;
+					}
+				}
+			}, false);
 		</script>
-
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"godot-fsd","experimentalVK":false,"fileSizes":{"godot-fsd.pck":3511792,"godot-fsd.wasm":52126319},"focusCanvas":true,"gdextensionLibs":[]};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"ensureCrossOriginIsolationHeaders":true,"executable":"godot-fsd","experimentalVK":false,"fileSizes":{"godot-fsd.pck":4047952,"godot-fsd.wasm":52126319},"focusCanvas":true,"gdextensionLibs":[]};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
